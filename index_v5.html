@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>GeoResearch Platform</title>
+
+  <!-- Tailwind (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-dark: #0A0F19;
+      --bg-light: #F8FAFC;
+      --panel-dark: rgba(15, 23, 42, .85);
+      --panel-light: rgba(255, 255, 255, .9);
+      --border-dark: rgba(255, 255, 255, .1);
+      --border-light: rgba(15, 23, 42, .1);
+      --shadow-dark: rgba(0, 0, 0, .5);
+      --shadow-light: rgba(60, 60, 90, .12);
+      --text-main-dark: #E2E8F0;
+      --text-main-light: #0F172A;
+      --accent1: #22D3EE;
+      --accent2: #2DD4BF;
+    }
+    * { 
+      font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      transition: color .2s ease-out, background-color .2s ease-out;
+    }
+    .mono { font-family: 'Roboto Mono', monospace; }
+
+    body { background: var(--bg-dark); color: var(--text-main-dark); }
+    #map { background: var(--bg-dark); }
+    .leaflet-container { background: var(--bg-dark) !important; }
+    .leaflet-control-zoom { display: none; }
+    .leaflet-control-attribution { opacity: .6; font-size: 10px; }
+
+    /* Dark Mode Filter for Map */
+    .leaflet-tile-pane { filter: saturate(.85) brightness(.9); transition: filter .3s ease; }
+    body.theme-light .leaflet-tile-pane { filter: none; }
+    body.theme-satellite .leaflet-tile-pane { filter: saturate(1.1) contrast(1.1) brightness(1.0); }
+
+    /* Glassmorphism */
+    .glass {
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 10px 32px var(--shadow-dark);
+      transform: translateZ(0);
+    }
+    .glass-dark { background: var(--panel-dark); border: 1px solid var(--border-dark); }
+    .glass-light { background: var(--panel-light); border: 1px solid var(--border-light); }
+    body.theme-light .glass { box-shadow: 0 10px 30px var(--shadow-light); }
+    
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(34,211,238,.4); border-radius: 99px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(34,211,238,.7); }
+
+    /* Custom Tooltip */
+    .custom-tooltip {
+      background: rgba(10, 15, 25, 0.95) !important;
+      border: 1px solid rgba(34,211,238,0.3) !important;
+      color: #fff !important;
+      font-weight: 600 !important;
+      border-radius: 8px !important;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5) !important;
+    }
+    .custom-tooltip::before { display: none !important; }
+
+    .hex-pattern {
+      background-image:url("data:image/svg+xml,%3Csvg width='64' height='64' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0l25.98 15v30L30 60 4.02 45V15z' fill='none' stroke='%2322d3ee' stroke-opacity='0.05'/%3E%3C/svg%3E");
+    }
+    @keyframes spin-slow { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+    @keyframes fade-in-up { from{opacity:0; transform: translateY(10px)} to{opacity:1; transform: translateY(0)} }
+    
+    .btn-soft {
+      background-color: rgba(148, 163, 184, .1);
+      border: 1px solid rgba(148, 163, 184, .15);
+    }
+    .btn-soft:hover { background-color: rgba(148, 163, 184, .2); }
+    body.theme-light .btn-soft { background-color: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.1); }
+    body.theme-light .btn-soft:hover { background-color: rgba(0,0,0,0.1); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent1), var(--accent2));
+      color: #06131f;
+      font-weight: 600;
+    }
+    .btn-primary:hover { filter: brightness(1.1); }
+
+    .legend-item[data-active="true"] {
+      background: rgba(34,211,238,.15);
+      border-color: rgba(34,211,238,.5);
+    }
+    
+    .admin-tab.active { color: var(--accent1) !important; border-bottom-color: var(--accent1); }
+    :focus-visible { outline: 2px solid var(--accent1) !important; outline-offset: 2px; }
+  </style>
+</head>
+<body class="theme-dark overflow-hidden">
+
+  <!-- TEMPLATES -->
+  <template id="toast-template">
+    <div class="toast glass rounded-2xl px-4 py-3 flex items-start gap-3 max-w-[360px] animate-[fade-in-up_.2s_cubic-bezier(0.22,1,0.36,1)]">
+        <div class="text-xl leading-none pt-0.5"></div>
+        <div class="min-w-0 flex-1">
+          <div class="text-sm font-semibold"></div>
+          <div class="text-sm text-slate-300/90 break-words leading-tight mt-1"></div>
+        </div>
+        <button class="ml-auto text-slate-400 hover:text-slate-200 transition" aria-label="Закрыть">✕</button>
+    </div>
+  </template>
+
+  <template id="street-row-template">
+    <tr class="hover:bg-slate-800/20 transition-colors">
+      <td class="p-3 font-medium text-slate-200"></td>
+      <td class="p-3">
+        <span class="px-2 py-1 rounded-lg text-xs font-medium border border-white/5"></span>
+      </td>
+      <td class="p-3 mono text-slate-400 text-xs"></td>
+      <td class="p-3 flex gap-2">
+        <button class="px-3 py-1.5 text-xs rounded-lg btn-soft text-slate-300 hover:text-white" data-action="edit">Правка</button>
+        <button class="px-3 py-1.5 text-xs rounded-lg btn-soft text-cyan-300 hover:text-cyan-200" data-action="fly">На карте</button>
+      </td>
+    </tr>
+  </template>
+
+  <!-- Loading Screen -->
+  <div id="loadingScreen" class="fixed inset-0 z-[9999] bg-[#0A0F19] flex items-center justify-center hex-pattern transition-opacity duration-500">
+    <div class="text-center px-6">
+      <div class="relative w-24 h-24 mx-auto mb-6">
+        <div class="absolute inset-0 border-4 border-cyan-400/20 rounded-full"></div>
+        <div class="absolute inset-0 border-t-4 border-t-cyan-400 rounded-full" style="animation: spin-slow 1s linear infinite;"></div>
+      </div>
+      <h1 class="text-2xl font-bold text-white mb-2">GeoResearch Platform</h1>
+      <p class="text-sm text-slate-500 mono">Загрузка системы...</p>
+      <div class="mt-6 w-64 h-1 bg-slate-800 rounded-full mx-auto overflow-hidden">
+        <div id="loadProgress" class="h-full bg-cyan-400 rounded-full transition-all duration-300" style="width:0%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toasts Container -->
+  <div id="toastStack" class="fixed top-20 right-4 z-[200] space-y-3 pointer-events-none"></div>
+
+  <!-- Main App -->
+  <div id="mainApp" class="opacity-0 transition-opacity duration-700">
+
+    <!-- Header -->
+    <header id="main-header" class="fixed top-0 left-0 right-0 z-50 glass glass-dark">
+      <div class="flex items-center justify-between px-4 py-2 gap-4 h-[60px]">
+        <!-- Logo -->
+        <div class="flex items-center gap-3 flex-shrink-0">
+          <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+            <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
+          </div>
+          <div class="hidden md:block">
+            <h1 class="text-sm font-bold text-slate-100">GeoResearch</h1>
+            <p class="text-[10px] text-slate-400 uppercase tracking-wider">Platform</p>
+          </div>
+        </div>
+        
+        <!-- Search -->
+        <div class="relative flex-grow max-w-md mx-auto">
+            <input type="text" id="globalSearch" placeholder="Поиск улицы..." class="w-full pl-9 pr-4 py-1.5 rounded-lg text-sm bg-slate-900/50 border border-white/10 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all placeholder-slate-500 text-white">
+            <svg class="absolute left-3 top-2 w-4 h-4 text-slate-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            <div id="searchResults" class="absolute top-full mt-2 w-full glass glass-dark rounded-xl overflow-hidden hidden shadow-2xl border border-white/10"></div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="flex items-center gap-2">
+          <div class="hidden sm:flex bg-slate-800/50 p-1 rounded-lg border border-white/5">
+            <button data-theme="dark" class="theme-btn px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wide text-slate-400 hover:text-white transition-colors">Dark</button>
+            <button data-theme="light" class="theme-btn px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wide text-slate-400 hover:text-white transition-colors">Light</button>
+            <button data-theme="satellite" class="theme-btn px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wide text-slate-400 hover:text-white transition-colors">Sat</button>
+          </div>
+          <button id="btnAdmin" class="w-9 h-9 flex items-center justify-center rounded-lg btn-soft text-slate-400 hover:text-cyan-300 transition-colors" title="Панель управления">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Map -->
+    <div id="map" class="fixed inset-0 z-0"></div>
+
+    <!-- Legend -->
+    <div id="legend" class="fixed bottom-6 left-6 z-40 glass glass-dark rounded-2xl p-4 w-[320px] flex flex-col gap-3 max-h-[75vh]">
+      <div class="flex items-center justify-between flex-shrink-0">
+        <h3 class="text-sm font-bold text-cyan-300 flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+          Легенда карты
+        </h3>
+        <button id="btnClearFocus" class="hidden text-[10px] px-2 py-0.5 rounded border border-slate-600 hover:bg-slate-700 transition">Сброс</button>
+      </div>
+      <div id="legendItems" class="overflow-y-auto pr-1 space-y-1.5 min-h-0"></div>
+    </div>
+
+    <!-- Side Panel -->
+    <div id="sidePanel" class="fixed top-0 right-0 h-full w-full md:w-[450px] z-40 glass glass-dark transform translate-x-full transition-transform duration-300 shadow-2xl">
+        <div class="h-full flex flex-col pt-[60px]">
+            <div class="flex items-center justify-between p-5 border-b border-white/5 flex-shrink-0">
+                <div class="flex flex-col gap-1">
+                  <span id="panelTypeBadge" class="self-start px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border border-white/10"></span>
+                </div>
+                <button id="btnCloseSide" class="p-2 rounded-lg hover:bg-white/10 transition-colors">
+                  <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6 space-y-6">
+              <div>
+                <h2 id="panelTitle" class="text-2xl font-bold text-white leading-tight mb-1"></h2>
+                <div class="mono text-xs text-slate-500" id="panelId"></div>
+              </div>
+              
+              <div id="statsGrid" class="grid grid-cols-2 gap-3"></div>
+              
+              <div id="descriptionBlock" class="hidden p-4 rounded-xl bg-slate-900/40 border border-white/5">
+                  <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Описание</h3>
+                  <p id="panelDescription" class="text-sm text-slate-300 leading-relaxed"></p>
+              </div>
+              
+              <div id="infrastructureBlock" class="hidden">
+                  <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Инфраструктура</h3>
+                  <div id="infrastructureList" class="flex flex-wrap gap-2"></div>
+              </div>
+              
+              <div id="propsBlock" class="hidden">
+                  <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Детали</h3>
+                  <div id="propsList" class="space-y-3 text-sm border-t border-white/5 pt-3"></div>
+              </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Panel -->
+    <div id="adminPanel" class="fixed inset-0 z-[100] hidden">
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity" data-close-admin></div>
+      <div class="absolute inset-4 md:inset-10 lg:inset-20 glass glass-dark rounded-2xl flex flex-col overflow-hidden shadow-2xl animate-[fade-in-up_.25s_ease-out]">
+        <!-- Admin Header -->
+        <div class="flex items-center justify-between p-5 border-b border-white/10 bg-slate-900/50 flex-shrink-0">
+          <div class="flex items-center gap-4">
+            <div class="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20">
+              <svg class="w-6 h-6 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+            </div>
+            <div>
+              <h2 class="text-xl font-bold text-white">Управление данными</h2>
+              <p class="text-xs text-slate-400">Импорт, экспорт и редактирование</p>
+            </div>
+          </div>
+          <button data-close-admin class="p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <!-- Admin Tabs -->
+        <div class="flex border-b border-white/10 bg-slate-900/30 flex-shrink-0 px-2 overflow-x-auto">
+          <button data-admin-tab="json" class="admin-tab active px-6 py-4 text-sm font-semibold border-b-2 border-transparent hover:text-white text-slate-400 transition-colors">JSON / Файл</button>
+          <button data-admin-tab="list" class="admin-tab px-6 py-4 text-sm font-semibold border-b-2 border-transparent hover:text-white text-slate-400 transition-colors">Список улиц</button>
+          <button data-admin-tab="csv" class="admin-tab px-6 py-4 text-sm font-semibold border-b-2 border-transparent hover:text-white text-slate-400 transition-colors">Массовое (CSV)</button>
+          <button data-admin-tab="analytics" class="admin-tab px-6 py-4 text-sm font-semibold border-b-2 border-transparent hover:text-white text-slate-400 transition-colors">Аналитика</button>
+        </div>
+        <!-- Admin Content -->
+        <div class="flex-1 overflow-hidden bg-[#0B111E]">
+          <div id="contentJson" class="admin-content h-full flex flex-col p-6 gap-5"></div>
+          <div id="contentList" class="admin-content h-full flex flex-col p-6 hidden"></div>
+          <div id="contentCsv" class="admin-content h-full flex flex-col p-6 gap-5 hidden"></div>
+          <div id="contentAnalytics" class="admin-content h-full p-6 overflow-y-auto hidden"></div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Edit Modal -->
+    <div id="editModal" class="fixed inset-0 z-[110] hidden">
+        <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" data-close-edit></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-lg glass glass-dark rounded-2xl p-6 shadow-2xl">
+            <h3 class="text-xl font-bold text-white mb-6">Редактирование</h3>
+            <div id="editForm" class="space-y-4 max-h-[60vh] overflow-y-auto pr-2 mb-6"></div>
+            <div class="flex justify-end gap-3 pt-4 border-t border-white/10">
+                <button data-close-edit class="px-5 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/5 transition">Отмена</button>
+                <button id="btnSaveEdit" class="px-6 py-2 rounded-xl btn-primary shadow-lg shadow-cyan-500/20">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Zoom Controls -->
+    <div class="fixed bottom-6 right-6 z-40 flex flex-col gap-2">
+      <button id="btnZoomIn" class="w-10 h-10 glass glass-dark rounded-xl flex items-center justify-center hover:bg-white/10 text-cyan-300 transition shadow-lg">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+      </button>
+      <button id="btnZoomOut" class="w-10 h-10 glass glass-dark rounded-xl flex items-center justify-center hover:bg-white/10 text-cyan-300 transition shadow-lg">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" /></svg>
+      </button>
+    </div>
+  </div>
+
+<script>
+(function() {
+    'use strict';
+
+    // #region CONFIG
+    const CONFIG = {
+        storageKey: 'geoResearchData_final',
+        city: { name: 'Кричев', center: [53.7183, 31.7083], zoom: 14 },
+        tiles: {
+            dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+            light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+            satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+        },
+        autoLoadCandidates: ['./data.geojson', './streets.geojson'], 
+        palette: [
+          '#22d3ee', '#34d399', '#a78bfa', '#f472b6', '#fb923c', '#facc15', 
+          '#60a5fa', '#e879f9', '#9ca3af', '#fb7185', '#818cf8', '#2dd4bf'
+        ],
+        skipProps: new Set(['name', 'type', 'highway', 'id', '@id', 'length', 'coverage', 'surface', 'traffic', 'year', 'start_date', 'description', 'note', 'infrastructure', 'amenity']),
+        performance: { canvasPadding: 0.5 },
+        editFields: ['name', 'type', 'coverage', 'traffic', 'year', 'description', 'infrastructure']
+    };
+    // #endregion
+
+    // #region STATE
+    const state = {
+        map: null,
+        tileLayer: null,
+        renderer: null,
+        mainLayer: null,
+        shadowLayer: null,
+        sharedTooltip: null,
+        streets: [],
+        streetGroups: {},
+        typeColors: {},
+        nameToLayers: new Map(),
+        nameToShadows: new Map(),
+        focusType: null,
+        focusMode: 'dim',
+        editingStreetId: null,
+        currentTheme: 'dark',
+        isSidePanelOpen: false,
+    };
+    // #endregion
+
+    // #region DOM & UI HELPERS
+    const $ = sel => document.querySelector(sel);
+    const $$ = sel => Array.from(document.querySelectorAll(sel));
+    
+    const escapeHtml = str => String(str || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
+
+    function toast(message, { type = 'info', timeout = 4000, title } = {}) {
+        const stack = $('#toastStack');
+        const tpl = $('#toast-template').content.cloneNode(true);
+        const el = tpl.firstElementChild;
+        el.style.pointerEvents = 'auto';
+        
+        const typeMap = {
+            success: { icon: '✅', title: 'Успешно' },
+            error: { icon: '🛑', title: 'Ошибка' },
+            warn: { icon: '⚠️', title: 'Внимание' },
+            info: { icon: 'ℹ️', title: 'Инфо' },
+        };
+        
+        el.querySelector('.text-xl').textContent = typeMap[type].icon;
+        el.querySelector('.font-semibold').textContent = title || typeMap[type].title;
+        el.querySelector('.text-sm').textContent = message;
+        
+        const colors = { success: '#4ade80', error: '#f87171', warn: '#fbbf24', info: '#22d3ee' };
+        el.style.borderLeft = `3px solid ${colors[type]}`;
+
+        const id = 't_' + Math.random().toString(16).slice(2);
+        el.id = id;
+        
+        el.querySelector('button').addEventListener('click', () => el.remove());
+        stack.appendChild(el);
+
+        if (timeout > 0) setTimeout(() => document.getElementById(id)?.remove(), timeout);
+    }
+    // #endregion
+
+    // #region INITIALIZATION
+    function init() {
+        initMap();
+        initUI();
+        initEventListeners();
+        loadInitialData();
+    }
+
+    function animateLoading() {
+        const progress = $('#loadProgress');
+        progress.style.width = '30%';
+        setTimeout(() => progress.style.width = '70%', 400);
+        setTimeout(() => {
+             progress.style.width = '100%';
+             setTimeout(finishLoading, 400);
+        }, 800);
+    }
+
+    function finishLoading() {
+        const loading = $('#loadingScreen');
+        loading.style.opacity = '0';
+        setTimeout(() => {
+            loading.style.display = 'none';
+            $('#mainApp').classList.remove('opacity-0');
+            init();
+        }, 500);
+    }
+
+    function initMap() {
+        state.map = L.map('map', { 
+            center: CONFIG.city.center, 
+            zoom: CONFIG.city.zoom, 
+            zoomControl: false, 
+            preferCanvas: true,
+            wheelPxPerZoomLevel: 120 
+        });
+        
+        state.renderer = L.canvas({ 
+            padding: CONFIG.performance.canvasPadding,
+            tolerance: 10 
+        });
+
+        state.tileLayer = L.tileLayer(CONFIG.tiles.dark, { attribution: '© OSM' }).addTo(state.map);
+        state.sharedTooltip = L.tooltip({ className: 'custom-tooltip', sticky: false, direction: 'top', offset: [0, -10], opacity: 1 });
+        state.map.on('click', () => closeSidePanel());
+    }
+    
+    function initUI() {
+        setTheme(localStorage.getItem('geoTheme') || 'dark');
+        renderAdminPanelContent();
+    }
+    
+    // ЛОГИКА ЗАГРУЗКИ ДАННЫХ (ОБНОВЛЕННАЯ)
+    async function loadInitialData() {
+        // Проверка протокола
+        if (window.location.protocol === 'file:') {
+            toast('Сайт открыт как локальный файл. Автозагрузка "data.geojson" заблокирована браузером (CORS). Используйте импорт вручную.', { type: 'warn', timeout: 10000 });
+            // Но мы всё равно проверим хранилище
+            if (loadFromStorage()) {
+                toast("Восстановлена предыдущая сессия.", { type: 'info' });
+            }
+            return;
+        }
+
+        // Если есть сохраненная сессия, восстанавливаем её
+        if (loadFromStorage()) {
+            toast("Загружена сохраненная сессия.", { type: 'info' });
+            return;
+        } 
+        
+        // Иначе пробуем загрузить файл
+        const loaded = await tryAutoloadCandidates();
+        if (!loaded) {
+            toast("Файл data.geojson не найден. Используйте ручной импорт.", { type: 'info' });
+        }
+    }
+    
+    function setTheme(theme) {
+        state.currentTheme = theme;
+        document.body.className = `theme-${theme} overflow-hidden`;
+        localStorage.setItem('geoTheme', theme);
+        
+        $$('.theme-btn').forEach(btn => {
+            const isActive = btn.dataset.theme === theme;
+            btn.classList.toggle('text-white', isActive);
+            btn.classList.toggle('bg-white/10', isActive);
+            btn.classList.toggle('text-slate-400', !isActive);
+        });
+
+        if (state.tileLayer) state.tileLayer.setUrl(CONFIG.tiles[theme]);
+        
+        $$('.glass').forEach(el => {
+            el.classList.toggle('glass-dark', theme !== 'light');
+            el.classList.toggle('glass-light', theme === 'light');
+        });
+    }
+    // #endregion
+    
+    // #region LOGIC
+    function processGeoJson(raw) {
+        const fc = normalizeToFeatureCollection(raw);
+        if (!fc) throw new Error('Формат не распознан. Ожидается GeoJSON FeatureCollection.');
+
+        state.streets = [];
+        state.streetGroups = {};
+        const typeSet = new Set();
+        
+        fc.features.forEach((feature, idx) => {
+            if (!feature?.geometry) return;
+            if (feature.geometry.type !== 'LineString' && feature.geometry.type !== 'MultiLineString') return;
+            
+            const props = feature.properties || {};
+            const street = {
+                id: String(props.id || props['@id'] || `s_${idx}`),
+                name: String(props.name || props.highway || `Street ${idx}`),
+                type: String(props.type || props.highway || 'unknown'),
+                length: Number(props.length) || 0, 
+                geometry: feature.geometry,
+                properties: props,
+            };
+            
+            if (!street.length) street.length = calculateLengthKm(street.geometry);
+            
+            typeSet.add(street.type);
+            state.streets.push(street);
+            if (!state.streetGroups[street.name]) state.streetGroups[street.name] = [];
+            state.streetGroups[street.name].push(street);
+        });
+
+        if (state.streets.length === 0) throw new Error('В файле нет линий (LineString).');
+
+        state.typeColors = {};
+        const sortedTypes = Array.from(typeSet).sort();
+        sortedTypes.forEach((t, i) => { 
+            state.typeColors[t] = CONFIG.palette[i % CONFIG.palette.length]; 
+        });
+
+        renderStreets();
+        renderLegend();
+        renderAnalytics();
+        saveToStorage();
+    }
+    
+    function normalizeToFeatureCollection(input) {
+        if (!input) return null;
+        if (input.type === 'FeatureCollection') return input;
+        if (input.type === 'Feature') return { type: 'FeatureCollection', features: [input] };
+        if (input.elements) {
+            const features = input.elements
+                .filter(el => el.type === 'way' && el.geometry)
+                .map((el, idx) => ({
+                    type: 'Feature',
+                    properties: { ...(el.tags || {}), id: el.id ?? `way_${idx}` },
+                    geometry: { type: 'LineString', coordinates: el.geometry.map(p => [p.lon, p.lat]) }
+                }));
+            return { type: 'FeatureCollection', features };
+        }
+        return null;
+    }
+
+    function calculateLengthKm(geometry) {
+        const R = 6371; 
+        let total = 0;
+        const calcPath = (coords) => {
+            for (let i = 0; i < coords.length - 1; i++) {
+                const [lon1, lat1] = coords[i];
+                const [lon2, lat2] = coords[i+1];
+                const dLat = (lat2 - lat1) * Math.PI / 180;
+                const dLon = (lon2 - lon1) * Math.PI / 180;
+                const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+                total += R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+            }
+        };
+        if (geometry.type === 'LineString') calcPath(geometry.coordinates);
+        else if (geometry.type === 'MultiLineString') geometry.coordinates.forEach(path => calcPath(path));
+        return total;
+    }
+
+    function saveToStorage() {
+        try {
+            const payload = { streets: state.streets, groups: state.streetGroups, colors: state.typeColors };
+            localStorage.setItem(CONFIG.storageKey, JSON.stringify(payload));
+        } catch (e) { console.error('LocalStorage save failed', e); }
+    }
+
+    function loadFromStorage() {
+        const raw = localStorage.getItem(CONFIG.storageKey);
+        if (!raw) return false;
+        try {
+            const data = JSON.parse(raw);
+            if (!Array.isArray(data.streets) || data.streets.length === 0) return false;
+            
+            state.streets = data.streets;
+            state.streetGroups = data.groups || {};
+            state.typeColors = data.colors || {};
+
+            renderStreets();
+            renderLegend();
+            renderAnalytics();
+            return true;
+        } catch {
+            localStorage.removeItem(CONFIG.storageKey);
+            return false;
+        }
+    }
+    // #endregion
+
+    // #region RENDER MAP
+    function renderStreets() {
+        if (!state.map) return;
+        
+        if (state.shadowLayer) state.map.removeLayer(state.shadowLayer);
+        if (state.mainLayer) state.map.removeLayer(state.mainLayer);
+        
+        state.nameToLayers.clear();
+        state.nameToShadows.clear();
+        state.focusType = null;
+        $('#btnClearFocus').classList.add('hidden');
+
+        const renderFeatures = [];
+        state.streets.forEach(s => {
+            const baseProps = { id: s.id, name: s.name, type: s.type };
+            if (s.geometry.type === 'MultiLineString') {
+                s.geometry.coordinates.forEach(coords => {
+                    renderFeatures.push({ type: 'Feature', properties: baseProps, geometry: { type: 'LineString', coordinates: coords } });
+                });
+            } else {
+                renderFeatures.push({ type: 'Feature', properties: baseProps, geometry: s.geometry });
+            }
+        });
+
+        const getStyle = (isShadow, type) => ({
+            color: state.typeColors[type] || '#ccc',
+            weight: isShadow ? 10 : 3,
+            opacity: isShadow ? 0.2 : 0.9,
+            lineCap: 'round', lineJoin: 'round',
+            renderer: state.renderer
+        });
+
+        // 1. Слой теней
+        state.shadowLayer = L.geoJSON(renderFeatures, {
+            interactive: false,
+            style: (f) => getStyle(true, f.properties.type),
+            onEachFeature: (f, l) => {
+                const name = f.properties.name;
+                if (!state.nameToShadows.has(name)) state.nameToShadows.set(name, []);
+                state.nameToShadows.get(name).push(l);
+            }
+        }).addTo(state.map);
+        
+        // 2. Основной слой
+        state.mainLayer = L.geoJSON(renderFeatures, {
+            interactive: true,
+            style: (f) => getStyle(false, f.properties.type),
+            onEachFeature: (f, l) => {
+                const { id, name } = f.properties;
+                if (!state.nameToLayers.has(name)) state.nameToLayers.set(name, []);
+                state.nameToLayers.get(name).push(l);
+                
+                l.on('click', ev => { L.DomEvent.stopPropagation(ev); openSidePanel(id); });
+                l.on('mouseover', ev => {
+                    applyStreetHover(name, true);
+                    state.sharedTooltip.setContent(escapeHtml(name)).setLatLng(ev.latlng);
+                    state.map.openTooltip(state.sharedTooltip);
+                });
+                l.on('mousemove', ev => state.sharedTooltip.setLatLng(ev.latlng));
+                l.on('mouseout', () => {
+                    applyStreetHover(name, false);
+                    state.map.closeTooltip(state.sharedTooltip);
+                });
+            }
+        }).addTo(state.map);
+        
+        if (state.streets.length > 0) {
+            try {
+                const bounds = state.mainLayer.getBounds();
+                if (bounds.isValid()) state.map.fitBounds(bounds, { padding: [80, 80] });
+            } catch {}
+        }
+    }
+
+    function styleForLayer(layer, isShadow) {
+        const type = layer.feature?.properties?.type;
+        const c = state.typeColors[type] || '#ccc';
+        const isFocused = type === state.focusType;
+
+        if (!state.focusType) {
+            return { color: c, weight: isShadow ? 10 : 3, opacity: isShadow ? 0.2 : 0.9 };
+        }
+        if (isFocused) {
+            return { color: c, weight: isShadow ? 12 : 5, opacity: isShadow ? 0.3 : 1 };
+        }
+        if (state.focusMode === 'hide') return { opacity: 0, interactive: false };
+        return { color: c, weight: isShadow ? 8 : 2, opacity: isShadow ? 0.02 : 0.1 };
+    }
+    
+    function applyFocusStyles() {
+        if (!state.mainLayer) return;
+        state.mainLayer.eachLayer(l => l.setStyle(styleForLayer(l, false)));
+        state.shadowLayer.eachLayer(l => l.setStyle(styleForLayer(l, true)));
+        // Bring focused to front
+        if (state.focusType) {
+            state.mainLayer.eachLayer(l => { 
+                if (l.feature?.properties?.type === state.focusType && l.bringToFront) l.bringToFront(); 
+            });
+        }
+    }
+    
+    function applyStreetHover(name, isHover) {
+        const layers = state.nameToLayers.get(name) || [];
+        const shadows = state.nameToShadows.get(name) || [];
+
+        if (isHover) {
+            layers.forEach(l => { l.setStyle({ weight: 5, opacity: 1 }); if (l.bringToFront) l.bringToFront(); });
+            shadows.forEach(l => l.setStyle({ weight: 14, opacity: 0.4 }));
+        } else {
+            layers.forEach(l => l.setStyle(styleForLayer(l, false)));
+            shadows.forEach(l => l.setStyle(styleForLayer(l, true)));
+        }
+    }
+    
+    function panToStreet(streetId) {
+        const street = state.streets.find(s => s.id === streetId);
+        if (!street) return;
+        try {
+            const tmp = L.geoJSON(street.geometry);
+            const bounds = tmp.getBounds();
+            if (bounds.isValid()) {
+                state.map.flyToBounds(bounds.pad(state.isSidePanelOpen ? 0.2 : 0.5), { duration: 0.8 });
+            }
+        } catch {}
+    }
+    // #endregion
+
+    // #region RENDER UI
+    function renderLegend() {
+        const container = $('#legendItems');
+        container.innerHTML = '';
+
+        if (state.streets.length === 0) {
+            container.innerHTML = `<div class="text-sm text-slate-500 text-center py-4">Нет данных</div>`;
+            return;
+        }
+
+        const typeCounts = state.streets.reduce((acc, s) => {
+            acc[s.type] = (acc[s.type] || 0) + 1;
+            return acc;
+        }, {});
+        
+        Object.entries(state.typeColors)
+            .sort((a,b) => (typeCounts[b[0]] || 0) - (typeCounts[a[0]] || 0))
+            .forEach(([type, color]) => {
+            const count = typeCounts[type] || 0;
+            const row = document.createElement('button');
+            row.className = 'legend-item w-full flex items-start gap-3 text-left px-3 py-2 rounded-lg transition border border-transparent hover:border-slate-600/40 shrink-0';
+            row.dataset.type = type;
+            row.dataset.active = 'false';
+            row.innerHTML = `
+                <span class="w-3 h-3 mt-1 rounded-full flex-shrink-0 shadow-sm" style="background:${color}; box-shadow: 0 0 8px ${color}66"></span>
+                <span class="text-slate-200 text-xs font-medium leading-tight flex-grow break-words pr-1">${escapeHtml(type)}</span>
+                <span class="text-slate-500 text-[10px] mono bg-slate-800/50 px-1.5 py-0.5 rounded flex-shrink-0">${count}</span>
+            `;
+            row.addEventListener('click', (e) => handleLegendClick(type, e.shiftKey));
+            container.appendChild(row);
+        });
+    }
+    
+    function renderAdminPanelContent() {
+        $('#contentJson').innerHTML = `
+            <div class="p-6 rounded-xl border border-dashed border-slate-700 bg-slate-900/30 flex flex-col items-center justify-center gap-3 group hover:border-cyan-500/30 transition-colors">
+                <svg class="w-10 h-10 text-slate-500 group-hover:text-cyan-400 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                <div class="text-center">
+                    <label class="btn-primary px-4 py-2 rounded-lg cursor-pointer inline-block text-sm shadow-lg shadow-cyan-500/20">
+                        Выбрать файл (.json)
+                        <input id="fileInput" type="file" accept=".json,.geojson" class="hidden">
+                    </label>
+                    <p class="text-xs text-slate-500 mt-2">или перетащите сюда</p>
+                </div>
+            </div>
+            
+            <div class="flex gap-3">
+                <button id="btnLoadSample" class="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm transition">Загрузить пример</button>
+                <button id="btnClearAll" class="flex-1 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl text-sm transition border border-red-500/10">Очистить всё</button>
+            </div>
+
+            <div class="flex-1 flex flex-col gap-2">
+                 <label class="text-xs font-bold text-slate-400 uppercase">Прямой ввод JSON</label>
+                 <textarea id="jsonInput" class="flex-1 w-full rounded-xl p-4 mono text-xs resize-none bg-black/40 border border-white/10 focus:border-cyan-500/50 outline-none text-slate-300" placeholder='{"type": "FeatureCollection", ...}'></textarea>
+            </div>
+            <button id="btnApplyJson" class="w-full py-3 rounded-xl btn-primary">Применить JSON</button>`;
+
+        $('#contentList').innerHTML = `
+            <div class="flex items-center gap-3">
+                <input type="text" id="streetSearch" placeholder="Фильтр..." class="flex-1 px-4 py-2 rounded-xl text-sm bg-black/40 border border-white/10 focus:border-cyan-500/50 outline-none text-white">
+                <button id="btnExport" class="px-4 py-2 rounded-xl btn-soft text-sm flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    Экспорт
+                </button>
+            </div>
+            <div class="flex-1 overflow-auto rounded-xl border border-white/5 bg-black/20">
+                <table class="w-full text-sm text-left">
+                    <thead class="sticky top-0 bg-[#0B111E] z-10 text-xs text-slate-500 uppercase"><tr class="border-b border-white/5">
+                        <th class="p-3">Название</th><th class="p-3">Тип</th><th class="p-3">Длина</th><th class="p-3">Опции</th>
+                    </tr></thead>
+                    <tbody id="streetTableBody" class="divide-y divide-white/5"></tbody>
+                </table>
+            </div>`;
+        
+        $('#contentCsv').innerHTML = `
+            <div class="p-4 rounded-xl bg-blue-500/5 border border-blue-500/10 text-sm text-blue-200">
+                <p class="mb-2 font-semibold">Массовое обновление свойств</p>
+                <p class="text-xs opacity-70 mb-2">Формат строки: <span class="mono bg-black/30 px-1 rounded">Название, Свойство, Значение</span></p>
+                <p class="text-xs opacity-70">Доступные свойства: <span class="mono text-white">${CONFIG.editFields.slice(1).join(', ')}</span></p>
+            </div>
+            <textarea id="csvInput" class="flex-1 w-full rounded-xl p-4 mono text-xs resize-none bg-black/40 border border-white/10 focus:border-cyan-500/50 outline-none text-slate-300" placeholder="ул. Ленина, coverage, асфальт"></textarea>
+            <button id="btnApplyCsv" class="w-full py-3 rounded-xl btn-primary">Применить изменения</button>`;
+    }
+    
+    function renderStreetList() {
+        const tbody = $('#streetTableBody');
+        tbody.innerHTML = '';
+        const tpl = $('#street-row-template');
+        const search = ($('#streetSearch').value || '').toLowerCase();
+        
+        const filtered = state.streets.filter(s => s.name.toLowerCase().includes(search) || s.type.toLowerCase().includes(search));
+        const toRender = search ? filtered : filtered.slice(0, 100);
+
+        toRender.forEach(s => {
+            const row = tpl.content.cloneNode(true);
+            const cells = row.querySelectorAll('td');
+            cells[0].textContent = s.name;
+            const typeCell = cells[1].querySelector('span');
+            typeCell.textContent = s.type;
+            const color = state.typeColors[s.type] || '#ccc';
+            typeCell.style.color = color;
+            typeCell.style.borderColor = `${color}44`;
+            cells[2].textContent = `${s.length.toFixed(2)} км`;
+            
+            row.querySelector('[data-action="edit"]').addEventListener('click', () => editStreet(s.id));
+            row.querySelector('[data-action="fly"]').addEventListener('click', () => { toggleAdmin(false); panToStreet(s.id); });
+
+            tbody.appendChild(row);
+        });
+        
+        if (!search && filtered.length > 100) {
+            const row = document.createElement('tr');
+            row.innerHTML = `<td colspan="4" class="p-3 text-center text-xs text-slate-500">Показано 100 из ${filtered.length}. Используйте поиск.</td>`;
+            tbody.appendChild(row);
+        }
+    }
+
+    function renderAnalytics() {
+        const container = $('#contentAnalytics');
+        if (state.streets.length === 0) {
+            container.innerHTML = `<div class="text-slate-500 text-center mt-10">Нет данных для анализа</div>`;
+            return;
+        }
+
+        const stats = {
+            totalCount: state.streets.length,
+            totalLength: state.streets.reduce((sum, s) => sum + s.length, 0),
+            types: {},
+        };
+
+        for (const s of state.streets) {
+            if (!stats.types[s.type]) stats.types[s.type] = { count: 0, length: 0 };
+            stats.types[s.type].count++;
+            stats.types[s.type].length += s.length;
+        }
+
+        const sortedTypes = Object.entries(stats.types).sort((a,b) => b[1].count - a[1].count);
+        const maxCount = Math.max(...sortedTypes.map(t => t[1].count));
+
+        container.innerHTML = `
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+                <div class="glass glass-dark rounded-xl p-5 border-l-4 border-cyan-400">
+                    <div class="text-xs text-slate-400 uppercase tracking-wider mb-1">Всего объектов</div>
+                    <div class="text-3xl font-bold text-white">${stats.totalCount}</div>
+                </div>
+                <div class="glass glass-dark rounded-xl p-5 border-l-4 border-teal-400">
+                    <div class="text-xs text-slate-400 uppercase tracking-wider mb-1">Общая длина</div>
+                    <div class="text-3xl font-bold text-white">${stats.totalLength.toFixed(1)} <span class="text-lg text-slate-500 font-normal">км</span></div>
+                </div>
+                <div class="glass glass-dark rounded-xl p-5 border-l-4 border-purple-400">
+                    <div class="text-xs text-slate-400 uppercase tracking-wider mb-1">Категорий</div>
+                    <div class="text-3xl font-bold text-white">${sortedTypes.length}</div>
+                </div>
+            </div>
+            
+            <h3 class="text-lg font-bold text-white mb-4">Детальная статистика</h3>
+            <div class="space-y-4">
+                ${sortedTypes.map(([type, data]) => {
+                    const barWidth = (data.count / maxCount) * 100;
+                    const color = state.typeColors[type] || '#ccc';
+                    return `
+                    <div class="group">
+                        <div class="flex justify-between text-sm mb-1">
+                            <span class="font-medium text-slate-200 break-words pr-2">${escapeHtml(type)}</span>
+                            <span class="mono text-slate-400 text-xs">${data.count} шт · ${data.length.toFixed(1)} км</span>
+                        </div>
+                        <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                            <div class="h-full rounded-full transition-all duration-500 group-hover:brightness-110" style="width:${barWidth}%; background-color:${color};"></div>
+                        </div>
+                    </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    }
+    // #endregion
+    
+    // #region HANDLERS
+    function initEventListeners() {
+        $$('.theme-btn').forEach(btn => btn.addEventListener('click', () => setTheme(btn.dataset.theme)));
+        $('#btnZoomIn').addEventListener('click', () => state.map.zoomIn());
+        $('#btnZoomOut').addEventListener('click', () => state.map.zoomOut());
+        $('#btnCloseSide').addEventListener('click', () => closeSidePanel());
+        $('#btnAdmin').addEventListener('click', () => toggleAdmin());
+        $$('[data-close-admin]').forEach(el => el.addEventListener('click', () => toggleAdmin(false)));
+        $$('[data-admin-tab]').forEach(btn => btn.addEventListener('click', () => setAdminTab(btn.dataset.adminTab)));
+        
+        document.body.addEventListener('click', e => {
+            const target = e.target;
+            if (target.id === 'btnApplyJson') return handleApplyJson();
+            if (target.id === 'btnLoadSample') return handleLoadSample();
+            if (target.id === 'btnClearAll') return handleClearAll();
+            if (target.id === 'btnApplyCsv') return handleApplyCsv();
+            if (target.id === 'btnExport') return handleExport();
+        });
+        document.body.addEventListener('change', e => {
+            if (e.target.id === 'fileInput') handleFileImport(e.target.files);
+        });
+        document.body.addEventListener('input', e => {
+            if (e.target.id === 'streetSearch') renderStreetList();
+            if (e.target.id === 'globalSearch') handleGlobalSearch(e.target.value);
+        });
+
+        $$('[data-close-edit]').forEach(el => el.addEventListener('click', () => closeEditModal()));
+        $('#btnSaveEdit').addEventListener('click', () => saveEdit());
+        $('#btnClearFocus').addEventListener('click', () => handleLegendClick(null));
+        document.addEventListener('keydown', e => {
+            if (e.ctrlKey && e.shiftKey && e.key.toUpperCase() === 'A') { e.preventDefault(); toggleAdmin(); }
+            if (e.key === 'Escape') {
+                closeSidePanel();
+                closeEditModal();
+                toggleAdmin(false);
+                $('#searchResults').classList.add('hidden');
+            }
+        });
+    }
+
+    function handleLegendClick(type, isShift) {
+        state.focusMode = isShift ? 'hide' : 'dim';
+        
+        if (state.focusType === type) {
+            state.focusType = null;
+            $('#btnClearFocus').classList.add('hidden');
+            $$('.legend-item').forEach(x => x.dataset.active = 'false');
+        } else {
+            state.focusType = type;
+            $('#btnClearFocus').classList.remove('hidden');
+            $$('.legend-item').forEach(x => x.dataset.active = (x.dataset.type === type));
+        }
+        applyFocusStyles();
+    }
+    
+    // ... ADMIN & EDIT FUNCTIONS ...
+    function toggleAdmin(force) {
+        const panel = $('#adminPanel');
+        const shouldOpen = typeof force === 'boolean' ? force : panel.classList.contains('hidden');
+        panel.classList.toggle('hidden', !shouldOpen);
+        if (shouldOpen) setAdminTab(localStorage.getItem('adminTab') || 'json');
+    }
+    
+    function setAdminTab(tab) {
+        localStorage.setItem('adminTab', tab);
+        $$('.admin-tab').forEach(t => t.classList.toggle('active', t.dataset.adminTab === tab));
+        $$('.admin-content').forEach(c => c.classList.toggle('hidden', !c.id.toLowerCase().includes(tab)));
+        if (tab === 'list') renderStreetList();
+        if (tab === 'analytics') renderAnalytics();
+    }
+    
+    function editStreet(id) {
+        state.editingStreetId = id;
+        const street = state.streets.find(s => s.id === id);
+        if (!street) return;
+
+        const form = $('#editForm');
+        form.innerHTML = CONFIG.editFields.map(field => {
+            const value = street[field] ?? street.properties?.[field] ?? '';
+            return `<div>
+              <label class="block text-xs font-bold text-slate-400 uppercase mb-1">${escapeHtml(field)}</label>
+              <input type="text" id="edit_${escapeHtml(field)}" value="${escapeHtml(value)}" class="w-full px-4 py-2 rounded-xl text-sm bg-black/30 border border-white/20 focus:border-cyan-500 transition-colors outline-none text-white">
+            </div>`;
+        }).join('');
+
+        $('#editModal').classList.remove('hidden');
+    }
+    
+    function closeEditModal() {
+        $('#editModal').classList.add('hidden');
+        state.editingStreetId = null;
+    }
+    
+    function saveEdit() {
+        if (!state.editingStreetId) return;
+        const streetIndex = state.streets.findIndex(s => s.id === state.editingStreetId);
+        if (streetIndex === -1) return;
+
+        const street = state.streets[streetIndex];
+        CONFIG.editFields.forEach(field => {
+            const value = $(`#edit_${field}`).value.trim();
+            if (field === 'name' || field === 'type') {
+                if (value) street[field] = value;
+            } else {
+                if (!street.properties) street.properties = {};
+                if (value) street.properties[field] = value;
+                else delete street.properties[field];
+            }
+        });
+
+        try {
+            saveToStorage();
+            const type = street.type;
+            if (!state.typeColors[type]) state.typeColors[type] = CONFIG.palette[Math.floor(Math.random() * CONFIG.palette.length)];
+            
+            toast('Изменения сохранены', { type: 'success' });
+            renderStreets();
+            renderStreetList();
+            renderAnalytics();
+            renderLegend();
+            closeEditModal();
+        } catch(e) {
+            toast(`Ошибка сохранения: ${e.message}`, { type: 'error' });
+        }
+    }
+    
+    function handleApplyJson() {
+        const input = $('#jsonInput').value.trim();
+        if (!input) return;
+        try {
+            const data = JSON.parse(input);
+            processGeoJson(data);
+            toast(`Загружено ${state.streets.length} объектов`, { type: 'success' });
+        } catch (e) {
+            toast(e.message, { type: 'error', timeout: 5000 });
+        }
+    }
+
+    function handleApplyCsv() {
+        const input = $('#csvInput').value.trim();
+        if (!input) return;
+        let updatedCount = 0;
+        input.split('\n').forEach(line => {
+            const parts = line.split(',').map(p => p.trim());
+            if (parts.length < 3) return;
+            const [name, attr, ...valueParts] = parts;
+            const value = valueParts.join(',').trim();
+            
+            state.streets.forEach(street => {
+                if (street.name.toLowerCase() === name.toLowerCase()) {
+                    if (!street.properties) street.properties = {};
+                    street.properties[attr] = value;
+                    if (attr === 'type') street.type = value;
+                    updatedCount++;
+                }
+            });
+        });
+        
+        saveToStorage();
+        renderStreets();
+        renderAnalytics();
+        renderLegend();
+        toast(`Обновлено ${updatedCount} записей`, { type: 'success' });
+    }
+
+    function handleClearAll() {
+        if (!confirm('Это удалит все данные, включая локальные правки. Вы уверены?')) return;
+        state.streets = [];
+        state.streetGroups = {};
+        state.typeColors = {};
+        state.focusType = null;
+        localStorage.removeItem(CONFIG.storageKey);
+        renderStreets();
+        renderLegend();
+        renderAnalytics();
+        renderStreetList();
+        toast('Данные очищены. Перезагрузка...', { type: 'warn' });
+        setTimeout(() => location.reload(), 1000);
+    }
+    
+    function handleExport() {
+        const fc = { type: 'FeatureCollection', features: state.streets.map(s => ({ type: 'Feature', properties: { ...s.properties, id: s.id, name: s.name, type: s.type, length: s.length }, geometry: s.geometry })) };
+        const blob = new Blob([JSON.stringify(fc, null, 2)], { type: 'application/geo+json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `georesearch_export_${new Date().toISOString().slice(0,10)}.geojson`;
+        a.click();
+        URL.revokeObjectURL(url);
+        a.remove();
+        toast('Файл экспортирован', { type: 'success' });
+    }
+    
+    function handleFileImport(files) {
+        if (!files || files.length === 0) return;
+        const file = files[0];
+        const reader = new FileReader();
+        reader.onload = e => {
+            $('#jsonInput').value = e.target.result;
+            handleApplyJson();
+        };
+        reader.readAsText(file);
+    }
+    
+    async function tryAutoloadCandidates() {
+        for (const path of CONFIG.autoLoadCandidates) {
+            try {
+                const res = await fetch(path, { cache: 'no-store' });
+                if (!res.ok) throw new Error(res.status);
+                const data = await res.json();
+                processGeoJson(data);
+                toast(`Автозагрузка: ${path}`, { type: 'success' });
+                return true;
+            } catch (e) {
+                console.log(`Autoload skipped for ${path}`);
+            }
+        }
+        return false;
+    }
+
+    function handleLoadSample() {
+        const sample = {"type":"FeatureCollection","features":[{"type":"Feature","properties":{"name":"ул. Ленина","type":"Главная","coverage":"асфальт","traffic":"высокий"},"geometry":{"type":"LineString","coordinates":[[31.703,53.719],[31.71,53.7186],[31.717,53.7182]]}},{"type":"Feature","properties":{"name":"ул. Пионерская (MultiLine)","type":"Связанные с советским периодом","coverage":"грунт"},"geometry":{"type":"MultiLineString","coordinates":[[[31.7106,53.6881],[31.7119,53.6870],[31.7140,53.6852]],[[31.7199,53.6723],[31.7193,53.6738]]]}}]};
+        $('#jsonInput').value = JSON.stringify(sample, null, 2);
+        handleApplyJson();
+    }
+    
+    // SIDE PANEL
+    function openSidePanel(streetId) {
+        const street = state.streets.find(s => s.id === streetId);
+        if (!street) return;
+
+        const group = state.streetGroups[street.name] || [street];
+        const totalLen = group.reduce((sum, s) => sum + s.length, 0);
+
+        $('#panelTypeBadge').textContent = street.type;
+        const color = state.typeColors[street.type] || '#ccc';
+        $('#panelTypeBadge').style.borderColor = color;
+        $('#panelTypeBadge').style.color = color;
+        $('#panelTypeBadge').style.backgroundColor = `${color}11`;
+        
+        $('#panelId').textContent = `ID: ${street.id}`;
+        $('#panelTitle').textContent = street.name;
+
+        const stat = (key, value) => value ? `<div class="rounded-xl p-3 bg-white/5 border border-white/5"><div class="text-[10px] uppercase font-bold text-slate-500 mb-1">${key}</div><div class="text-lg font-bold text-white mono">${escapeHtml(value)}</div></div>` : '';
+        const props = street.properties || {};
+        $('#statsGrid').innerHTML = 
+            stat('Длина', `${totalLen.toFixed(2)} км`) +
+            stat('Покрытие', props.coverage || props.surface) +
+            stat('Трафик', props.traffic) +
+            stat('Год', props.year || props.start_date);
+
+        const desc = props.description || props.note;
+        $('#descriptionBlock').classList.toggle('hidden', !desc);
+        if (desc) $('#panelDescription').textContent = desc;
+
+        const infra = props.infrastructure || props.amenity;
+        $('#infrastructureBlock').classList.toggle('hidden', !infra);
+        if (infra) {
+            const items = Array.isArray(infra) ? infra : String(infra).split(',');
+            $('#infrastructureList').innerHTML = items.map(i => `<span class="px-2 py-1 rounded text-xs bg-cyan-500/10 text-cyan-200 border border-cyan-500/20">${escapeHtml(i.trim())}</span>`).join('');
+        }
+
+        const addProps = Object.entries(props).filter(([k]) => !CONFIG.skipProps.has(k));
+        $('#propsBlock').classList.toggle('hidden', addProps.length === 0);
+        if (addProps.length > 0) {
+            $('#propsList').innerHTML = addProps.map(([k,v]) => `<div class="flex justify-between gap-4 py-1"><span class="text-slate-500 font-medium">${escapeHtml(k)}</span><span class="text-slate-300 text-right break-words">${escapeHtml(v)}</span></div>`).join('');
+        }
+        
+        state.isSidePanelOpen = true;
+        $('#sidePanel').classList.remove('translate-x-full');
+        applyStreetHover(street.name, true);
+        panToStreet(streetId);
+    }
+    
+    function closeSidePanel() {
+        state.isSidePanelOpen = false;
+        $('#sidePanel').classList.add('translate-x-full');
+        applyFocusStyles();
+    }
+
+    function handleGlobalSearch(query) {
+        const container = $('#searchResults');
+        if (!query || query.length < 2) {
+            container.classList.add('hidden');
+            return;
+        }
+
+        const uniqueNames = [...new Set(state.streets.map(s => s.name))];
+        const results = uniqueNames
+            .filter(name => name.toLowerCase().includes(query.toLowerCase()))
+            .slice(0, 5);
+
+        if (results.length === 0) {
+            container.classList.add('hidden');
+            return;
+        }
+
+        container.innerHTML = results.map(name =>
+            `<button class="w-full text-left px-4 py-3 hover:bg-cyan-500/10 transition-colors border-b border-white/5 last:border-0 text-sm text-slate-200" data-street-name="${escapeHtml(name)}">${escapeHtml(name)}</button>`
+        ).join('');
+        container.classList.remove('hidden');
+        
+        $$('#searchResults button').forEach(btn => btn.addEventListener('click', () => {
+            const streetName = btn.dataset.streetName;
+            const street = state.streets.find(s => s.name === streetName);
+            if (street) openSidePanel(street.id);
+            container.classList.add('hidden');
+            $('#globalSearch').value = streetName;
+        }));
+    }
+    // #endregion
+
+    document.addEventListener('DOMContentLoaded', animateLoading);
+})();
+</script>
+
+</body>
+</html>
+
