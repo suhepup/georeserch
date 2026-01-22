@@ -414,12 +414,16 @@
 
     function initMap() {
         state.map = L.map('map', { 
-            prefix: '<a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contribution</a>',
             center: CONFIG.city.center, 
             zoom: CONFIG.city.zoom, 
             zoomControl: false, 
             preferCanvas: true,
             wheelPxPerZoomLevel: 120 
+        });
+
+        L.control.attribution({
+          prefix: '<a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a>',
+          tolerance: 10
         });
         
         state.renderer = L.canvas({ 
