@@ -423,7 +423,7 @@
         });
 
         L.control.attribution({
-          prefix: '<a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a>'}).add to(state.map);
+          prefix: '<a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a>'}).addTo(state.map);
         });
         
         state.renderer = L.canvas({ 
@@ -431,7 +431,7 @@
             tolerance: 10 
         });
 
-        state.tileLayer = L.tileLayer(CONFIG.tiles.dark, { attribution: '© OSM' }).addTo(state.map);
+        state.tileLayer = L.tileLayer(CONFIG.tiles.dark, { attribution: '' }).addTo(state.map);
         state.sharedTooltip = L.tooltip({ className: 'custom-tooltip', sticky: false, direction: 'top', offset: [0, -10], opacity: 1 });
         state.map.on('click', () => closeSidePanel());
     }
