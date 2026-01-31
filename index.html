@@ -157,19 +157,49 @@
   <div id="mainApp" class="opacity-0 transition-opacity duration-700">
 
     <!-- Header -->
-    <header id="main-header" class="fixed top-0 left-0 right-0 z-50 glass glass-dark">
-      <div class="flex items-center justify-between px-4 py-2 gap-4 h-[60px]">
-        <!-- Logo -->
-        <div class="flex items-center gap-3 flex-shrink-0">
-          <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
-            <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
-          </div>
-          <div class="hidden md:block">
-            <h1 class="text-sm font-bold text-slate-100">GeoResearch</h1>
-            <p class="text-[10px] text-slate-400 uppercase tracking-wider">Platform</p>
-          </div>
-        </div>
-        
+        <!-- ВАРИАНТ 2: ЗАМЕНА ДЛЯ <header id="main-header"> -->
+<!-- Контейнер с pointer-events-none, чтобы клики между кнопками проходили на карту -->
+    <header id="main-header" class="fixed top-0 left-0 right-0 z-50 p-4 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pointer-events-none">
+  
+    <!-- Остров 1: Логотип -->
+    <div class="pointer-events-auto bg-slate-900/80 backdrop-blur-md border border-white/10 rounded-full px-4 py-2 flex items-center gap-3 shadow-2xl">
+      <div class="w-6 h-6 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center">
+        <svg class="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-width="3" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      </div>
+      <span class="font-semibold text-slate-100 text-sm pr-1">GeoResearch</span>
+    </div>
+
+    <!-- Остров 2: Поиск (Центральный) -->
+    <!-- На мобилках будет во всю ширину, на десктопе по центру -->
+    <div class="pointer-events-auto w-full sm:max-w-md absolute top-20 sm:top-6 left-0 sm:left-1/2 sm:-translate-x-1/2 px-4 sm:px-0 z-50">
+      <div class="relative group">
+         <div class="absolute inset-0 bg-slate-900/80 backdrop-blur-md rounded-full shadow-2xl border border-white/10 transition-colors group-hover:border-cyan-500/30"></div>
+         <div class="relative flex items-center px-4 py-2.5">
+            <svg class="w-4 h-4 text-slate-500 ml-1 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            <input type="text" id="globalSearch" placeholder="Поиск объекта..." class="w-full bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none">
+         </div>
+         <!-- Результаты поиска -->
+         <div id="searchResults" class="absolute top-full mt-2 w-full bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden hidden shadow-2xl py-2"></div>
+      </div>
+    </div>
+
+    <!-- Остров 3: Инструменты -->
+    <div class="pointer-events-auto flex gap-2 ml-auto sm:ml-0">
+      <!-- Группа переключателей -->
+      <div class="bg-slate-900/80 backdrop-blur-md border border-white/10 rounded-full p-1 flex shadow-2xl">
+        <button data-theme="dark" class="theme-btn w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all" title="Dark">D</button>
+        <button data-theme="light" class="theme-btn w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all" title="Light">L</button>
+        <button data-theme="satellite" class="theme-btn w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all" title="Sat">S</button>
+      </div>
+
+      <!-- Кнопка настроек -->
+      <button id="btnAdmin" class="bg-slate-900/80 backdrop-blur-md border border-white/10 rounded-full w-10 h-10 flex items-center justify-center text-slate-400 hover:text-cyan-400 hover:border-cyan-500/30 shadow-2xl transition-all">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+      </button>
+    </div>
+
+</header>
+
         <!-- Search -->
         <div class="relative flex-grow max-w-md mx-auto">
             <input type="text" id="globalSearch" placeholder="Поиск улицы..." class="w-full pl-9 pr-4 py-1.5 rounded-lg text-sm bg-slate-900/50 border border-white/10 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all placeholder-slate-500 text-white">
